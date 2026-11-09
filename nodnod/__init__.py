@@ -18,6 +18,7 @@ __all__ = (
     "Scalar",
     "ResultNode",
     "Scope",
+    "node_pack",
     "SequentialEither",
     "Value",
     "create_node_from_function",

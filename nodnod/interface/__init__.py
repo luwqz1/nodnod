@@ -6,6 +6,7 @@ from nodnod.interface.generic import generic_node
 from nodnod.interface.inject import inject_externals, inject_internals
 from nodnod.interface.node_constructor import NodeConstructor
 from nodnod.interface.node_from_function import Externals, create_node_from_function
+from nodnod.interface.node_pack import node_pack
 from nodnod.interface.polymorphic import case, polymorphic
 from nodnod.interface.result_node import ResultNode
 from nodnod.interface.scalar import scalar_node
@@ -21,6 +22,7 @@ __all__ = (
     "SequentialEither",
     "case",
     "compose_one",
+    "node_pack",
     "create_agent_from_node",
     "create_node_from_function",
     "generic_node",

@@ -10,9 +10,9 @@ from nodnod import (
     Externals,
     NodeError,
     Scope,
-    create_agent_from_node,
     create_node_from_function,
     inject_externals,
+    node_pack,
     scalar_node,
 )
 from nodnod.interface.compose_one import compose_one
@@ -71,6 +71,13 @@ class SinceActive:
         return datetime.datetime.now() - user.last_active
 
 
+@node_pack
+class UserNode:
+    id: UserId
+    email: Email
+    since_active: SinceActive
+
+
 async def handler(email_provider: EmailProvider, boba: str, lol: str, since_active: SinceActive, user: UserSource):
     print(email_provider, boba, lol, since_active, user.user)
     return "handler result"
@@ -79,7 +86,7 @@ async def handler(email_provider: EmailProvider, boba: str, lol: str, since_acti
 async def main():
     # Compile time
     handler_node = create_node_from_function(handler)
-    agent = create_agent_from_node(handler_node, EventLoopAgent)
+    agent = EventLoopAgent.build({handler_node, UserNode})
 
     user = User(1, kungfu.Some("lol@skibidi.org"), datetime.datetime.now())
 
@@ -88,6 +95,7 @@ async def main():
         scope.inject(User, user)
         inject_externals(scope, {"boba": "ahah", "lol": "omg"})
         await agent.run(scope, {})
+        print(scope.merge()[UserNode].value)
 
     print(
         await compose_one(
