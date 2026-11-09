@@ -12,10 +12,10 @@ from nodnod.utils.injection import get_injection_type
 from nodnod.utils.is_type import is_type
 from nodnod.utils.misc import reverse_dict
 from nodnod.utils.resolve_signature import resolve_signature
+from nodnod.value import Value
 
 if typing.TYPE_CHECKING:
     from nodnod.interface.composable import Composable
-    from nodnod.value import Value
 
 type Generator[T] = typing.Generator[T, None, None] | typing.AsyncGenerator[T, None]
 type ComposeResponse[T] = T | "Node[T]" | typing.Awaitable[T] | Generator[T]
@@ -41,10 +41,6 @@ def initialize_forward_refs(
 ) -> None:
     from nodnod.interface.node_from_function import ExternalDependency
 
-    # Iterate a snapshot and consume requests selectively: building a function node must not
-    # drain (and mis-mark as external) forward-ref requests that belong to unrelated, still
-    # pending class nodes. `own_node`, when provided, is the function node being built; only its
-    # own requests may be marked external — foreign co-requesters are preserved.
     for type_name in list(FORWARD_REF_REQUESTS):
         requesters = FORWARD_REF_REQUESTS.get(type_name)
         if requesters is None:
@@ -56,6 +52,7 @@ def initialize_forward_refs(
 
             for dependency in requesters:
                 dependency.__init_subclass__()
+
             continue
 
         if not is_from_function:
@@ -72,8 +69,10 @@ def initialize_forward_refs(
         # injection hooks) by create_node_from_function. Remove only this function's own request,
         # preserving any foreign class co-requesters waiting on the same name.
         INITIALIZED_FORWARD_REFS.setdefault(type_name, ExternalDependency(type_name))
+
         if own_node is not None:
             requesters.remove(own_node)
+
             if not requesters:
                 FORWARD_REF_REQUESTS.pop(type_name, None)
         else:
@@ -107,12 +106,12 @@ class Scalar:
 
 
 class Node[T = typing.Any, Root = typing.Any]:
-    __type__: typing.Any = None  # type: ignore
-    __dependencies__: set[type["Node"]] = None  # type: ignore
-    __injections__: set[typing.Any] = None  # type: ignore
     __map__: typing.Mapping[typing.Any, type["Node"]] = None  # type: ignore
+    __type__: typing.Any = None
+    __dependencies__: set[type["Node"]] | None = None
+    __injections__: set[typing.Any] | None = None
 
-    __initialize__: typing.Callable[[set["Value"]], ComposeResponse[T]] = None  # type: ignore
+    __initialize__: typing.Callable[[set[Value]], ComposeResponse[T]] | None = None
     __compose__: typing.Callable[..., ComposeResponse[T]] = dummy_compose
     __compose_names_by_type__: dict[typing.Any, str] = None  # type: ignore
 
@@ -210,6 +209,7 @@ class Node[T = typing.Any, Root = typing.Any]:
                     dependency_nodes.add(create_result_node(dep_type))  # type: ignore
                 elif is_type(dep_type, type) or is_type(dep_type, tuple):
                     args = typing.get_args(dep_type)
+
                     if not args:
                         raise NodeBuildError(f"Expected `type` or `tuple` with type argument, got `{dep_type!r}`.")
 
@@ -232,6 +232,7 @@ class Node[T = typing.Any, Root = typing.Any]:
                     dependency_nodes.add(type_arg_node)  # type: ignore
                 else:
                     is_processed_by_hook = False
+
                     for hook in injection_hooks:
                         if hook(cls, dep_name, dep_type):
                             is_processed_by_hook = True
@@ -247,8 +248,6 @@ class Node[T = typing.Any, Root = typing.Any]:
 
                         # Unresolved ForwardRef
                         if isinstance(dep_type, str | ForwardRef):
-                            # NOTE: Might it be worth implementing a way that resolves these ForwardRef's?
-                            # Resolve in runtime via helper function like `get_subnodes`.
                             raise LookupError(
                                 f"Unresolved dependency for `{dep_name}` of `{cls.__name__}`, "
                                 "it looks like a `ForwardRef` that could not be resolved.",
@@ -263,9 +262,11 @@ class Node[T = typing.Any, Root = typing.Any]:
                 # function node are addressed by name, not type, so they are exempt.
                 externals = getattr(cls, "__externals__", frozenset())
                 seen_types: dict[typing.Any, str] = {}
+
                 for arg_name, arg_type in all_args.items():
                     if arg_name in externals:
                         continue
+
                     if arg_type in seen_types:
                         raise NodeBuildError(
                             f"`{cls.__name__}.__compose__` has parameters `{seen_types[arg_type]}` "
@@ -273,6 +274,7 @@ class Node[T = typing.Any, Root = typing.Any]:
                             f"`{getattr(arg_type, '__name__', arg_type)!r}`; a node cannot depend "
                             "on the same type under two parameter names.",
                         )
+
                     seen_types[arg_type] = arg_name
 
                 cls.__compose_names_by_type__ = reverse_dict(all_args)
@@ -286,7 +288,7 @@ class Node[T = typing.Any, Root = typing.Any]:
             if cls.__initialize__ is None:
                 # If not set, prepare the dependencies distribution
                 cls.__initialize__ = (
-                    kungfu.F[set["Value"]]()
+                    kungfu.F[set[Value]]()
                     .then(
                         lambda values: (
                             {

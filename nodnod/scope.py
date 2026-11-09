@@ -8,6 +8,7 @@ from kungfu.library.monad.option import NOTHING, Option, Some
 from nodnod.error import NodeError
 from nodnod.node import Node
 from nodnod.utils.aio import awaitable_noop
+from nodnod.utils.repr_type import type_repr
 from nodnod.value import Value
 
 type AnyType = typing.Any
@@ -15,11 +16,12 @@ type AnyType = typing.Any
 
 def _raise_teardown_errors(errors: list[BaseException]) -> typing.NoReturn:
     if len(errors) == 1:
-        raise errors[0]
+        raise errors[0] from None
+
     raise NodeError(
         "errors occurred during scope teardown",
         from_many=[error if isinstance(error, NodeError) else NodeError(repr(error)) for error in errors],
-    )
+    ) from None
 
 
 class Scope(OrderedDict[AnyType, Value]):
@@ -31,7 +33,7 @@ class Scope(OrderedDict[AnyType, Value]):
         super().__init__([(Scope, Value(Scope, self))])
 
     def __repr__(self) -> str:
-        return f"Scope {self.detail} " + (", ".join(f"{node_t.__name__}: {value!r}" for node_t, value in self.items() if value.value is not self) if self else "(empty)")
+        return f"Scope {self.detail} " + (", ".join(f"{type_repr(node_t)}: {value!r}" for node_t, value in self.items() if value.value is not self) if self else "(empty)")
 
     def retrieve(self, key: AnyType) -> Option[Value]:
         if key not in self:
@@ -72,22 +74,28 @@ class Scope(OrderedDict[AnyType, Value]):
 
     async def _close_values_async(self, values: list[Value]) -> None:
         errors: list[BaseException] = []
+
         for value in values:
             try:
                 result = value.close()
+
                 if not isinstance(result, awaitable_noop):
                     await result
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 errors.append(error)
+
         if errors:
             _raise_teardown_errors(errors)
 
     def has_parent(self, parent: "Scope") -> bool:
         candidate = self.prev
+
         while candidate is not None:
             if candidate is parent:
                 return True
+
             candidate = candidate.prev
+
         return False
 
     def create_child(self, detail: str | None = None) -> "Scope":
@@ -119,9 +127,9 @@ class Scope(OrderedDict[AnyType, Value]):
 
     def merge(self) -> "Scope":
         scope = Scope(detail="merge")
-
         chain: list[Scope] = []
         part: Scope | None = self
+
         while part is not None:
             chain.append(part)
             part = part.prev

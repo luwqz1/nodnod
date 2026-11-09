@@ -2,16 +2,18 @@ import types
 import typing
 from reprlib import recursive_repr
 
-from nodnod.node import Generator
 from nodnod.utils.aio import awaitable_noop
 from nodnod.utils.generator import generator_asend, generator_send
 from nodnod.utils.repr_type import type_repr
+
+if typing.TYPE_CHECKING:
+    from nodnod.node import Generator
 
 type AnyType = typing.Any
 
 
 class Value[T = typing.Any]:
-    def __init__(self, cls: AnyType, value: T, generator: Generator[T] | None = None) -> None:
+    def __init__(self, cls: AnyType, value: T, generator: "Generator[T] | None" = None) -> None:
         self.cls = cls
         self.value = value
         self.generator = generator
@@ -21,6 +23,7 @@ class Value[T = typing.Any]:
 
     def close(self) -> typing.Awaitable[typing.Any]:
         generator = self.generator
+
         if generator is None:
             return awaitable_noop()
 

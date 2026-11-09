@@ -1,8 +1,6 @@
-import typing
+import typing_extensions as typing
 
-
-def type_repr(obj: typing.Any, /) -> str:
-    return obj.__name__ if isinstance(obj, type) else repr(obj)
+type_repr = typing.type_repr
 
 
 __all__ = ("type_repr",)
