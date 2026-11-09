@@ -24,11 +24,11 @@ class PackNode(Node, abstract=True):
 
         @(lambda compose: setattr(cls, "__compose__", compose))
         @wraps(wrapped=cls.__init__, assigned=("__module__", "__doc__", "__annotate__", "__type_params__"))
-        @(lambda f: setattr(f, "__signature__", inspect.signature(cls).replace(return_annotation=cls)) or f)
+        @(lambda compose: setattr(compose, "__signature__", inspect.signature(cls).replace(return_annotation=cls)) or compose)
         def __compose__(*args: Any, **kwargs: Any) -> Any:  # noqa
-            service = object.__new__(cls)
-            service.__init__(*args, **kwargs)
-            return service
+            instance = object.__new__(cls)
+            instance.__init__(*args, **kwargs)
+            return instance
 
         super().__init_subclass__()
 
